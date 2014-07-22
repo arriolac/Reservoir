@@ -2,8 +2,8 @@ package com.anupcowkur.reservoir;
 
 import android.content.Context;
 import android.os.AsyncTask;
-
 import com.google.gson.Gson;
+import java.lang.reflect.Type;
 
 /**
  * The main reservoir class.
@@ -11,6 +11,7 @@ import com.google.gson.Gson;
 public class Reservoir {
 
     private static SimpleDiskCache cache;
+    private static final Gson sGson = new Gson();
 
     /**
      * Initialize Reservoir
@@ -43,7 +44,7 @@ public class Reservoir {
      * @param object the object to be stored.
      */
     public static void put(String key, Object object) throws Exception {
-        String json = new Gson().toJson(object);
+        String json = sGson.toJson(object);
         cache.put(key, json);
     }
 
@@ -73,9 +74,25 @@ public class Reservoir {
     public static <T> T get(String key, Class<T> classOfT) throws Exception {
 
         String json = cache.getString(key).getString();
-        T value = new Gson().fromJson(json, classOfT);
+        T value = sGson.fromJson(json, classOfT);
         if(value == null)
             throw new NullPointerException();
+        return value;
+    }
+
+    /**
+     * Get an object from Reservoir with the given key. This a blocking IO operation.
+     *
+     * @param key the key String.
+     * @param typeOfT the Type of the expected return object.
+     * @return the object of the given type if it exists.
+     */
+    public static <T> T get(String key, Type typeOfT) throws Exception {
+        final String json = cache.getString(key).getString();
+        T value = sGson.fromJson(json, typeOfT);
+        if (value == null) {
+            throw new NullPointerException();
+        }
         return value;
     }
 
@@ -89,6 +106,10 @@ public class Reservoir {
     public static <T> void getAsync(String key, Class<T> classOfT,
                                     ReservoirGetCallback<T> callback) {
         new GetTask<T>(key, classOfT, callback).execute();
+    }
+
+    public static <T> void getAsync(String key, Type typeOfT, ReservoirGetCallback<T> callback) {
+        new GetTask<T>(key, typeOfT, callback).execute();
     }
 
     /**
@@ -125,6 +146,7 @@ public class Reservoir {
         private Exception e;
         private final ReservoirPutCallback callback;
         final Object object;
+        private static final Gson sGson = new Gson();
 
         private PutTask(String key, Object object, ReservoirPutCallback callback) {
             this.key = key;
@@ -136,7 +158,7 @@ public class Reservoir {
         @Override
         protected Void doInBackground(Void... params) {
             try {
-                String json = new Gson().toJson(object);
+                String json = sGson.toJson(object);
                 cache.put(key, json);
             } catch (Exception e) {
                 this.e = e;
@@ -165,12 +187,23 @@ public class Reservoir {
         private final String key;
         private final ReservoirGetCallback callback;
         private final Class<T> classOfT;
+        private final Type typeOfT;
         private Exception e;
+        private static final Gson sGson = new Gson();
 
-        private GetTask(String key, Class<T> classOfT, ReservoirGetCallback callback) {
+        private GetTask(String key, Class<T> classOfT, ReservoirGetCallback<T> callback) {
             this.key = key;
             this.callback = callback;
             this.classOfT = classOfT;
+            this.typeOfT = null;
+            this.e = null;
+        }
+
+        public GetTask(String key, Type typeOfT, ReservoirGetCallback<T> callback) {
+            this.key = key;
+            this.callback = callback;
+            this.classOfT = null;
+            this.typeOfT = typeOfT;
             this.e = null;
         }
 
@@ -178,7 +211,12 @@ public class Reservoir {
         protected T doInBackground(Void... params) {
             try {
                 String json = cache.getString(key).getString();
-                T value = new Gson().fromJson(json, classOfT);
+                T value;
+                if (classOfT != null) {
+                    value = sGson.fromJson(json, classOfT);
+                } else {
+                    value = sGson.fromJson(json, typeOfT);
+                }
                 if(value == null)
                     throw new NullPointerException();
                 return value;
