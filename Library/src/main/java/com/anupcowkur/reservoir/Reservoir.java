@@ -11,7 +11,7 @@ import java.lang.reflect.Type;
 public class Reservoir {
 
     private static SimpleDiskCache cache;
-    private static final Gson sGson = new Gson();
+    private static Gson sGson;
 
     /**
      * Initialize Reservoir
@@ -22,6 +22,7 @@ public class Reservoir {
     public static synchronized void init(Context context, long maxSize) throws Exception {
 
         cache = SimpleDiskCache.open(context.getFilesDir(), 1, maxSize);
+        sGson = new Gson();
     }
 
     /**
